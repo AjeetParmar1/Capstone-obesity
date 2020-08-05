@@ -1,0 +1,481 @@
+---
+title: 'EdX: Harvard University: Data Science Capstone: custom project'
+author: "Ajeet Parmar"
+date: "August 4th, 2020"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 4
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(warn=-1)
+```
+\pagebreak
+
+# **Introduction**
+  In 2015, it was estimated that 400 million people, or 5% of the world's population, live with diabetes. If unregistered, one can suffer adverse health effects from a lack of insulin which can lead to death. The objective of this project is to generate a machine learning algorithm which will be able to predict cases of diabetes to an accuracy of over 90%. 
+  
+  This will be accomplished using a dataset from the University of California, Irvine consisting of 520 instances of patients with data collected via direct questionnaires from the patients of Sylhet Diabetes
+Hospital in Sylhet, Bangladesh and approved by a doctor. 
+  The attributes in the dataset are as follows:
+  
+  - Age	                                                      
+  - Gender	                                                      
+  - Polyuria	                                                      
+  - Polydipsia	                                                      
+  - sudden weight loss                                                      	
+  - weakness	                                                      
+  - Polyphagia	                                                      
+  - Genital thrush                                                      	
+  - visual blurring	                                                      
+  - Itching	                                                      
+  - Irritability	                                                      
+  - delayed healing	                                                      
+  - partial paresis	                                                      
+  - muscle stiffness	                                                      
+  - Alopecia	                                                      
+  - Obesity	                                                      
+  - class (whether the patient is diabetic or not)                                                      
+  
+  The key steps involved are as follows: 
+  
+  - splitting the data into two groups: training data and testing data.                                 
+  - training multiple algorithms using the training data and predicting using the testing data.             
+  - obtaining the accuracy by comparing the output to the testing data's class.             
+  - Aggregating the training algorithms into one ensemble.                                           
+  - Finding the overall prediction for each case using the ensemble.                                  
+  - Finding the final accuracy by comparing the ensemble's results to the testing data.                  
+  
+```{r begin, include=FALSE}
+library(tidyverse)
+library(caret)
+library(gam)
+library(rpart)
+library(rattle) # library to generate clean looking trees
+
+suppressWarnings(set.seed(1, sample.kind = "Rounding"))
+
+data <- read_csv("diabetes_data_upload.csv")
+data <- data %>% as_data_frame()
+
+data$Polyuria <- data$Polyuria %>% factor(levels = c("No", "Yes"))
+data$Polydipsia <- data$Polydipsia %>% factor(levels = c("No", "Yes"))
+data$`sudden weight loss` <- data$`sudden weight loss` %>% factor(levels = c("No", "Yes"))
+data$weakness <- data$weakness%>% factor(levels = c("No", "Yes"))
+data$Polyphagia<- data$Polyphagia %>% factor(levels = c("No", "Yes"))
+data$`Genital thrush` <- data$`Genital thrush` %>% factor(levels = c("No", "Yes"))
+data$`visual blurring` <- data$`visual blurring`%>% factor(levels = c("No", "Yes"))
+data$Polydipsia <- data$Polydipsia %>% factor(levels = c("No", "Yes"))
+data$Itching<- data$Itching %>% factor(levels = c("No", "Yes"))
+data$Itching <- data$Itching%>% factor(levels = c("No", "Yes"))
+data$Irritability <- data$Irritability %>% factor(levels = c("No", "Yes"))
+data$`delayed healing` <- data$`delayed healing` %>% factor(levels = c("No", "Yes"))
+data$`partial paresis`<- data$`partial paresis` %>% factor(levels = c("No", "Yes"))
+data$`muscle stiffness` <- data$`muscle stiffness` %>% factor(levels = c("No", "Yes"))
+data$Alopecia <- data$Alopecia %>% factor(levels = c("No", "Yes"))
+data$Obesity <- data$Obesity %>% factor(levels = c("No", "Yes"))
+data$class <- data$class %>% factor(levels = c("Negative", "Positive"))
+
+
+data %>% group_by(Age) %>% mutate(percent = mean(class == "Positive")) %>% 
+  ggplot(aes(x = Age, y = percent)) + geom_point(color = "blue") + 
+  ylab("Percent of age with diabetes") + xlab("Age") + 
+  ggtitle("Age vs percent with Diabetes")
+
+index <- createDataPartition(y = data$Age, times = 1, p = 0.6, list = FALSE)
+training_data <- data %>% slice(index)
+testing_data <- data %>% slice(-index)
+
+# Logistic regression model 
+glm_train <- train(class ~., data = training_data, method = "glm", family = "binomial")
+y_hat_glm <- predict(glm_train, testing_data)
+glm_acc <- mean(y_hat_glm == testing_data$class)
+
+# LDA regression model 
+lda_train <- train(class ~., data = training_data, method = "lda", family = "binomial")
+y_hat_lda <- predict(lda_train, testing_data)
+lda_acc <- mean(y_hat_lda == testing_data$class)
+
+# QDA regression model 
+qda_train <- train(class ~., data = training_data, method = "qda", family = "binomial")
+y_hat_qda <- predict(qda_train, testing_data)
+qda_acc <- mean(y_hat_qda == testing_data$class)
+
+# Naive Bayes regression model 
+Bayes_train <- train(class ~., data = training_data, method = "naive_bayes")
+y_hat_Bayes <- predict(Bayes_train, testing_data)
+Bayes_acc <- mean(y_hat_Bayes == testing_data$class)
+
+ks = seq(1,15, 1)
+
+  knn_tune <- train(class ~ ., method = "knn", data = training_data,tuneGrid = data.frame(k = ks))
+  knn_tune$bestTune
+  knn_tune$results
+  plot(knn_tune$results$Accuracy)
+
+  knn_fit <- train(class ~ ., method = "knn", data = training_data, tuneGrid = data.frame(k = 1))
+  y_hat_knn <- predict(knn_fit, testing_data)
+knn_acc <- mean(y_hat_knn == testing_data$class)
+  
+rf <- train(class ~ ., method = "rf", data = training_data, tuneGrid = data.frame(mtry = 4))
+y_hat_rf <- predict(rf, testing_data)
+rf_acc <- mean(y_hat_rf == testing_data$class)
+
+
+ensemble <- data.frame(LDA = y_hat_lda, QDA = y_hat_qda,
+                       Naive_Bayes = y_hat_Bayes, knn = y_hat_knn, 
+                       rf = y_hat_rf, glm = y_hat_glm)
+
+ultimatum <- rowMeans(ensemble == "Positive")
+y_hat <- ifelse(ultimatum > 0.5, "Positive", "Negative")
+ensemble_acc <- mean(y_hat == testing_data$class)
+```
+  
+# **Methods/Analysis**
+
+## Data cleaning
+  As the data was present in a .csv file, I simply used read_csv() to import the data. Then, I manually made the attributes factors to clean the data. All the data was complete so I did not need to check for NA's. Then, I split the data into the training data and testing data with 60% of the data going to the training data and 40% going to the testing data to avoid overfitting. 
+  
+
+## Modeling approaches
+
+I tuned two models: knn and random forest to yield optimal results. The results are below: 
+  
+### K nearest neighbors
+  With knn, I had to tune my data so I could find out which k value to use. My results for tuning are below: 
+  
+```{r k-tune, echo=FALSE}
+ks = seq(1,15, 1)
+
+  knn_tune <- train(class ~ ., method = "knn", data = training_data,tuneGrid = data.frame(k = ks))
+  plot(knn_tune$results$Accuracy)
+  
+```
+  
+  As seen, when K is 1, I get the highest accuracy. Therefore, k is 1 within my knn training. 
+
+### Random Forest
+Similarly, I would have to optimize my random forest algorithm. In this, I needed to optimize the "mtry" parameter. Below are the results: 
+
+```{r rf, echo=FALSE}
+mtry_val <- seq(1, 25, 1)
+  rf_test <- train(class ~ ., method = "rf", data = training_data, tuneGrid = data.frame(mtry = mtry_val))
+
+
+rf_test$results
+
+#Note: for some reason, whenever I plotted it, it would give me a different plot each time. So I just printed the table instead. 
+  
+```
+
+The accuracy is at a maximum when mtry = 4. Thus, this is what I use in my parameter. 
+
+\pagebreak
+
+## Data exploration and data visualization
+
+  With my quantitative data (age), I was able to graph the number of people with diabetes by age. However, this did not yield any correlation which I could use: 
+  
+```{r age_graph, echo = FALSE}
+options(warn=-1)
+data %>% group_by(Age) %>% mutate(numwith = sum(class == "Positive")) %>% 
+  ggplot(aes(x = Age)) + geom_histogram(color = "blue", bins = 10) + 
+  ylab("Number of people with diabetes") + xlab("Age") + 
+  ggtitle("Number of people with diabetes by age")
+```
+  
+As seen, there is not much correlation. Additionally, there are many ages where there is only one person with diabetes. There is a higher number of people at the middle with diabetes. However, this is attributed to the sampling since there are less samples near the lower end or the higher end of ages. This can be improved by expanding the dataframe to more people worlwide so the dataset can avoid being biased to one region and a certain age bracket. As a result of this, this algorithm can be tailored more to the global population rather than a specific age bracket in Bangladesh. 
+\pagebreak 
+
+### Cases by gender
+I also tried graphing the number of cases by gender. This did reveal something which could be beneficial:
+
+```{r cases_by_gender, echo=FALSE}
+data %>% ggplot(aes(Gender, fill = class, color = class)) +
+geom_bar()
+
+```
+
+  As seen, females have a higher proportion of cases than males. This could be an insight later seen in our data. It should be noted that this is only unique to our dataset! In real life, diabetes is more common in males than in females due to testosterone levels in males. 
+\pagebreak
+
+### Cases by polyuria
+
+Below is number of cases by polyuria: 
+  
+```{r cases_by_polyuria, echo=FALSE}
+data %>% ggplot(aes(Polyuria, fill = class, color = class)) +
+geom_bar()
+
+```
+
+  Polyuria does play a substantial role as well. It seems that if one suffers from polyuria, they're more likely to have diabetes. 
+\pagebreak
+
+### Cases by polydipsia
+
+  Below is a comparison between polydipsia states and diabetes state. 
+  
+```{r cases_by_polydipsia, echo=FALSE}
+data %>% ggplot(aes(Polydipsia, fill = class, color = class)) +
+geom_bar()
+
+```
+  
+  This also reveals that if one has polydipsia, they are more likely to be a positive case of diabetes. 
+\pagebreak
+
+### Cases by sudden weight loss
+
+  Below is a comparison between sudden weight loss and diabetes state. 
+  
+```{r cases_by_sudden_weight_loss, echo=FALSE}
+data %>% ggplot(aes(`sudden weight loss`, fill = class, color = class)) +
+geom_bar()
+
+```
+  
+  This reveals a correlation between weight loss and diabetes where if one experiences sudden weight loss, they are more likely to be a case of diabetes.  
+\pagebreak
+
+### Cases by weakness
+
+  Below is a comparison between weakness and if one has diabetes. 
+  
+```{r cases_by_weakness, echo=FALSE}
+data %>% ggplot(aes(weakness, fill = class, color = class)) +
+geom_bar()
+
+```
+  
+  This reveals a slightly weak correlation between weakness and having diabetes. This implies that weakness may not be as valuable of an attribute as other attributes. 
+\pagebreak
+
+
+### Cases by polyphagia
+
+  Below is a comparison between polyphagia and if one has diabetes. 
+  
+```{r cases_by_polyphagia, echo=FALSE}
+data %>% ggplot(aes(Polyphagia, fill = class, color = class)) +
+geom_bar()
+
+```
+  
+  There is a relatively strong correlation between having diabetes and polyphagia. However, it is equally likely to have diabetes whether or not one has polyphagia. Therefore, this is a somewhat valuable attribute.
+
+\pagebreak
+  
+### Cases by genital thrush
+
+  Below is a comparison between genital thrush and if one has diabetes. 
+  
+```{r cases_by_genital_thrush, echo=FALSE}
+data %>% ggplot(aes(`Genital thrush`, fill = class, color = class)) +
+geom_bar()
+
+```
+  
+  Just like with polyphagia, there is a relatively strong correlation between having diabetes and genital thrush although there is a higher proportion of diabetic patients without genital thrush than non diabetic patients. This also may not be valuable as an attribute. 
+  
+\pagebreak
+
+### Cases by visual blurring
+
+  Below is a comparison between visual blurring and if one has diabetes. 
+  
+```{r cases_by_visual_blurring, echo=FALSE}
+data %>% ggplot(aes(`visual blurring`, fill = class, color = class)) +
+geom_bar()
+
+```
+  
+  Usually, diabetic patients have visual blurring. However, there is an equal proportion between diabetis patients and non diabetic patients relative to visual blurring. 
+  
+\pagebreak
+
+### Cases by itching
+
+  Below is a comparison between itching and if one has diabetes. 
+  
+```{r cases_by_itching, echo=FALSE}
+data %>% ggplot(aes(Itching, fill = class, color = class)) +
+geom_bar()
+
+```
+  
+  Itching does not seem to be a valuable attribute since there are relatively equal proportions of diabetic patients who are itching and not itching. Since Bangladesh is a tropical, hot climate, itching can be due to other factors such as mosquitos or natural skin irritability. 
+  
+\pagebreak
+
+### Cases by irritability
+
+  Below is a comparison between irritability and if one has diabetes. 
+  
+```{r cases_by_irritability, echo=FALSE}
+data %>% ggplot(aes(Irritability, fill = class, color = class)) +
+geom_bar()
+
+```
+  
+  Irritability is definitely a factor of diabetic patients. Judging by this, it seems to be a good attribute to determine if one is diabetic. 
+  
+\pagebreak
+
+### Cases by delayed healing
+
+  Below is a comparison between delayed healing and if one has diabetes. 
+  
+```{r cases_by_delayed_healing, echo=FALSE}
+data %>% ggplot(aes(`delayed healing`, fill = class, color = class)) +
+geom_bar()
+
+```
+  
+  Delayed healing does have, to an extent, equal proportions of diabetic patients across the options. Although diabetes does compromise the immune system and result in delayed healing, reasons for delayed healing in non diabetic patients could be immune system disorders or compromising diseases such as HIV or general vitamin deficiencies. This is not a strong attribute we can use. 
+  
+\pagebreak
+
+### Cases by partial paresis
+
+  Below is a comparison between partial paresis and if one has diabetes. 
+  
+```{r cases_by_partial_paresis, echo=FALSE}
+data %>% ggplot(aes(`partial paresis`, fill = class, color = class)) +
+geom_bar()
+
+```
+  
+  As a high portion of patients with partial paresis have diabetes, partial paresis could be a valuable indicator for diabetes. However, its strength is limited by the proportion of diabetic patients who don't have partial paresis.  
+  
+\pagebreak
+
+### Cases by muscle stiffness
+
+  Below is a comparison between muscle stiffness and if one has diabetes. 
+  
+```{r cases_by_muscle_stiffness, echo=FALSE}
+data %>% ggplot(aes(`muscle stiffness`, fill = class, color = class)) +
+geom_bar()
+
+```
+  
+  Muscle stiffness does have a higher proportion of diabetic patients than without muscle stiffness. However, the number of diabetic patients between the two is similar. Therefore, this is not as strong of an attribute as the others. 
+  
+\pagebreak
+
+### Cases by Alopecia
+
+  Below is a comparison between alopecia and if one has diabetes. 
+  
+```{r cases_by_alopecia, echo=FALSE}
+data %>% ggplot(aes(Alopecia, fill = class, color = class)) +
+geom_bar()
+
+```
+  
+  There is a higher proportion of diabetic patients without alopecia than with alopecia. Conversely, not having alopecia can be a symptom of diabetes according to this data. Therefore, we can use this as a decently strong attribute. 
+  
+\pagebreak
+
+### Cases by obesity
+
+  Below is a comparison between obesity and if one has diabetes. 
+  
+```{r cases_by_obesity, echo=FALSE}
+data %>% ggplot(aes(Obesity, fill = class, color = class)) +
+geom_bar()
+
+```
+
+  As a high number of patients who are obese are diabetic as well, we can use this attribute. However, since non-obese patients can also be diabetic, the use of this attribute is slightly limited. 
+
+\pagebreak 
+
+We can classify the attributes in the following manner:                                                 
+
+Strong attributes:                                                                                      
+- gender                                                                                          
+- polyuria                                                                                          
+- polydypsia                                                                                          
+- sudden weight loss                                                                                    
+- irritability                                                                                          
+- alopesia                                                                                          
+
+medium strength attributes:                                                                            
+- polyphagia                                                                                            
+- partial paresis                                                                                       
+- muscle stiffness                                                                                      
+- obesity                                                                                          
+
+weak attributes:                                                                                        
+- weakness                                                                                            
+- genital thrush                                                                                        
+- visual blurring                                                                                       
+- itching                                                                                              
+- delayed healing                                                                                       
+
+  We can expect to see the strong attributes (perhaps utilized with the medium attributes) within our algorithm. We should not expect to see the weak attributes based of this hypothetical data analysis. 
+
+\pagebreak
+## Insights
+
+Lastly, I created a regression tree using the random forest algorithm: 
+
+```{r tree, echo=FALSE}
+
+tree <- rpart(class~., data = training_data) # generate the tree
+
+fancyRpartPlot(tree, caption = "decision tree for the data") # creates the tree for the training data. 
+
+```
+
+ From the information, we can observe that the main attributes are Polyuria, age, gender, alopecia, irritability, itching and polydipsia.(As seen beforehand with our graph of gender vs cases, we can see that gender does play a substantial role). As an insight, this is beneficial to us since we can use this tree to classify individual cases as either positive or negative. However, this is a product of machine learning and is therefore imperfect. We must also account for bias. As this data is from one region of the world (Bangladesh), we cannot use it to safely estimate whether someone from another nation is diabetic, albeit this tree is an excellent foundation.                                                   
+  Compared with previous data analysis, we did see some attributes classified as "strong" show up such as gender, polyuria, polydipsia, alopecia, and irritability. In fact, all of our strong attributes showed up except for sudden weight loss. However, it is suprosing that itching showed up as an attribute on our tree since it was classified as a weak attribute. Perhaps it was combined with another string attribute, such as age, within the decision tree generation.                                                        
+  Relative to the dataset, a limitation is that the data mainly consists of factors. These are mostly boolean values such as Yes/No or Male/Female. Although it is possible to create a Least Squares estimate with this data by coercing the values into 0s and 1s, the final values will likely end up becoming decimals, which does not make sense in the real world (one person cannot be 0.876 positive for diabetes, for example) and would be more of a hindrance than a help. Instead, I can use modelling algorithms since my dataset is not large and my computer can support such computational operations.    
+    I used several modelling algorithms within my algorithm. I used logistic regression, LDA, QDA, Naive Bayes, k nearest neighbors (knn), and random forest. Notably, random forest, logistic regression, and QDA gave me the highest individual accuracies out of any other method while knn and LDA gave me the lowest. 
+    A possible method to increase my accuracy could be to neglect the models which give me low accuracy. However, this leads to the fallacy of incomplete evidence (colloquially known as "cherry-picking") which is a violation of scientific research and leads to pseudoscience. Therefore, I will not neglect insufficient models. 
+  
+
+
+# **Results**
+
+## Model results 
+Below is a table of general accuracies according to each method with the ensemble included: 
+
+```{r predictions, echo= FALSE}
+options(warn=-1)
+data.frame(GLM = glm_acc, LDA = lda_acc, QDA = qda_acc, Naive_Bayes = Bayes_acc, knn = knn_acc, 
+           Random_Forest = rf_acc, Ensemble = ensemble_acc)
+
+           
+```
+
+  As seen, the overall accuracy of this ensemble is around 0.95. We have achieved our goal of achieving an accuracy over 90%. We could neglect the less accurate models. However, as aforementioned, this would be bias on our behalf and would violate scientific principles. Therefore, the less accurate models should be kept.                                                                                                 
+  With the inclusion of more quantitative data, other methods can be used such as a least squares estimate which could be a beneficial inclusion to the ensemble. Other algorithms which were not included in the Data Science course could be used to expand upon the ensemble such as nnet and earth. 
+
+## Model performance
+  The model performance, while relatively high, does not achieve an extremely high level of accuracy. This can be attributed to multiple factors, either in the dataset or due to the algorithms. 
+  A limitation of the algorithms can be, for instance, that the Knn has an extremely low k value. This can lead to overtraining on a particular dataset which would not work as well on another section of the data.                                                                                                    
+  A limitation of the dataset is that it has only a certain segment of a population and includes middle ages males and females without including many older and younger patients. Using these other patients for the algorithm can help produce less skewed results. Another limitation of the dataset is that is somehow contradicts previously observed medical phenomenae. As mentioned in the hypothetical exploratory data analysis, males are more likely than females to have diabetes due to testosterone imbalances. Somehow, more female patients have diabetes than male populations. This could be due to sampling bias or a biased population sample. However, the dataset could be expanded to account for a more accurate population sample. 
+  
+# **Conclusion**
+
+## Summary
+
+  In summary, this project explored the dataset on diabetic patients from the University of California, Irvine from patients from Sylhet Diabetes Hospital in Sylhet, Bangladesh, performing exploratory data analysis on each of the attributes to see if they indicate diabetes, used machine learning algorithms such as logistic regression, LDA, QDA, Naive Bayes, k nearest neighbors (knn), and random forest, tuned knn and random forest according to the k-value and mtry respectively, then concluded with an ensemble of the algorithms with the accuracy of the algorithms compared. 
+  
+## Potential impact
+
+  Since many people suffer from diabetes worldwide, a efficient testing system would be largely beneficial to many to easily test for diabetes. However, the accuracy should be improved and the algorithms should be tested on a more representative dataset before this algorithm is used en masse throughout the world. 
+  
+## Limitations
+  Limitations of this project are present both in the algorithms and the dataset. Some of the algorithms, such as knn, are guilty of overfitting and need to be rectified properly. The dataset is local to a single population in Bangladesh with a specific age bracket. To make the accuracy better, the data could be expanded to patients worldwide and could include an even distribution of ages and sex. 
+  
+## Future work
+  Future work could include multiple other algorithms such as linear regression and least squares estimates. However, for a least squares estimate to work, more quantitative data needs to be used to measure a tangible distance from the mean. Thus, the dataset could be expanded to include useful quantitative data such as daily or yearly sugar consumption, testosterone imbalance (for men) or testosterone surplus (for women). The main expansion of the dataset needs to include a more representative sample of ages so that the data is more uniform. Similarly, the data could include patients worldwide to create an algorithm which can be used worldwide. This does tie in to an excellent machine learning quote I heard: "data is to a machine learning algorithm as grapes are to wine. To make a good wine, you need good grapes. Similarly, to make a good machine learning algorithm, you need good data." So expanding the data to get better data will inevitably improve our algorithm substantially. 
+  
+  
